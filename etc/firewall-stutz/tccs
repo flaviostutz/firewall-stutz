@@ -1,0 +1,124 @@
+#!/usr/bin/perl -w
+
+# copyright 2005-2008 Tomasz Pala <gotar@pld-linux.org>
+# license: GPL
+
+# usage:
+# watch -d -n1 'tc -s c ls dev imq1 | tccs -f 10 2>/dev/null'
+
+# tccs.rc file format:
+# %translate = ( '1:2' => 'LAN', '1:4076' => 'pc76', '1:b238' => 'VoIP-3_29 );
+
+
+#use strict;
+use Getopt::Long;
+
+#tc -s class show dev eth1 | perl -e 'undef $/; while(<>) { while (/class htb (.*?) .*?\n\s*Sent (\d+) .*?\n\s*rate (\d+)/sg) { print "Klasa: $1 Wyslano: $2 ($3bps)\n" }; };'
+
+my $class;
+my $classid;
+my $parent;
+my $rate;
+my $ceil;
+my $crate;
+my $sent;
+my $range;
+my %tree;
+my $recurse=10;
+my $speedlevel=0;
+my %translate;
+
+eval `cat tccs.rc 2>/dev/null`;
+
+GetOptions('recurse=s'=>\$recurse,
+		'fastest=s'=>\$speedlevel);
+
+while(<STDIN>) {
+	if(/^ lended: / and $crate) {
+		if($rate ne $ceil) {
+			$range="$rate-$ceil";
+		} else {
+			$range=$rate;
+		}
+#		print "$parent: $class $classid $range $crate kb/s\n";
+		@{$tree{$parent}}[0]='' unless @{$tree{$parent}}[0];
+		push @{$tree{$parent}}, $classid;
+		$crate=sprintf "%8.1lf",$crate;
+		$sent=sprintf "%10.0lf",$sent/1024;
+		@{$tree{$classid}}[0]="($class) $range	$crate kb/s	($sent KB)";
+		$crate=0;
+		next;
+	}
+	if(/^ Sent (\d+) bytes /) {
+		$sent=$1;
+		next;
+	}
+	if(/^ rate (\S+)(bit|bps) /) {
+		# print "BPS rate!\n" if $2 eq "bps";
+	if ($2 eq "bps") {
+		($crate=$1)=~s/K/*1024/;
+		$crate=~s/M/*1024*1024/;
+		$crate=eval $crate;
+		$crate*=8/1000;
+	} else {
+		($crate=$1)=~s/K/*1000/;
+		$crate=~s/M/*1000*1000/;
+		$crate=eval $crate;
+		$crate/=1000;
+	}
+		next;
+	}
+	if(/^class (\S+) (\S+:\S+) (root|parent (\S+:\S+)) .*rate (\S+) ceil (\S+)/) {
+		$class=$1;
+		$classid=$2;
+		$rate=$5;
+		$ceil=$6;
+		($parent=$3)=~s/parent //;
+		next;
+	}
+}
+
+my $level='';
+
+sub my_sort {
+	return 0 unless $_[0];
+	return $_[0] cmp $_[1] unless $speedlevel;
+	return -1 if($a=~/^\(/);
+	$tree{$_[0]}[0]=~m|\(\S+\)\ \S+	\s*([\d\.]+) kb/s	\(|;
+	my $a=$1;
+	$tree{$_[1]}[0]=~m|\(\S+\)\ \S+	\s*([\d\.]+) kb/s	\(|;
+	my $b=$1;
+	return $b <=> $a;
+}
+
+sub list {
+	return if length($level)/2==$recurse;
+	if($_[0]) {
+		if(exists $translate{$_[0]}) {
+			printf "$level%-4s",$translate{$_[0]};
+		} else {
+			printf "$level%-4s",$_[0];
+		}
+	} else { return; }
+	$level.='  ';
+	my $rank=0;
+	foreach my $id (sort {my_sort($a,$b)} (@{$tree{$_[0]}})) {
+		if($id=~/^\(/) {
+			print "	$id\n";
+			next;
+		} else {
+			$rank++;
+			next if $rank>$speedlevel and $speedlevel;
+			list($id);
+		}
+	}
+	$level=substr($level,2);
+}
+
+#@{$tree{'root'}}[0]="\n";
+#list('root');
+if(defined $tree{'root'}) {
+foreach (sort {my_sort($a,$b)} (@{$tree{'root'}})) {
+	list($_);
+}
+}

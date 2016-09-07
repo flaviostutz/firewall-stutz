@@ -1,0 +1,15 @@
+# AUTHORIZED SUBNETS ROUTING
+
+if [ $start -eq 1 ]; then
+	echo "Configuring authorized subnet routing..."
+
+	# everyone can access DMZ hosts
+	#enableFORWARDPacket $ANY_ADDR $DMZ_ADDR 0 0 $ANY_IFACE $DMZ_IFACE
+
+	# DMZ hosts can access SRV hosts
+	#enableFORWARDPacket $DMZ_ADDR $SRV_ADDR 0 0 $DMZ_IFACE $SRV_IFACE
+
+	# all routing is permitted
+	enableFORWARDPacket $ANY_ADDR $ANY_ADDR
+#	enableFORWARDPacket $ANY_ADDR $ANY_ADDR
+fi

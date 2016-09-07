@@ -1,0 +1,14 @@
+# COMMONS ATTACKS PROTECTION
+
+if [ $start -eq 1 ]; then
+	echo "Configuring basic attack protection..."
+
+	# Syn-flood
+	#iptables -A FORWARD -p tcp --syn -m limit --limit 1/s -j ACCEPT
+	
+	# Furtive port scanner
+	#iptables -A FORWARD -p tcp --tcp-flags SYN,ACK,FIN,RST RST -m limit --limit 1/s -j ACCEPT
+	
+	# Ping of death
+	#iptables -A FORWARD -p icmp --icmp-type echo-request -m limit --limit 1/s -j ACCEPT
+fi

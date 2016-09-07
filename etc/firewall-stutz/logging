@@ -1,0 +1,52 @@
+LOG_LEVEL_NONE=0
+LOG_LEVEL_ERROR=1
+LOG_LEVEL_WARN=2
+LOG_LEVEL_INFO=3
+LOG_LEVEL_FINE=4
+LOG_LEVEL_FINER=5
+LOG_LEVEL_FINEST=6
+LOG_LEVEL_ALL=99
+
+#### Log functions
+logLevel=$LOG_LEVEL_INFO
+
+setLogLevel() {
+	logLevel=$1
+}
+
+finest() {
+	log "[FINEST] $1" $LOG_LEVEL_FINEST
+}
+finer() {
+	log "[FINER] $1" $LOG_LEVEL_FINER
+}
+fine() {
+	log "[FINE] $1" $LOG_LEVEL_FINE
+}
+info() {
+	log "[INFO] $1" $LOG_LEVEL_INFO
+}
+warn() {
+	log "[WARN] $1" $LOG_LEVEL_WARN
+}
+error() {
+	log "[ERROR] $1" $LOG_LEVEL_ERROR
+}
+
+log() {
+	if (("$logLevel" >= "$2")); then
+		echo "$1"
+	fi
+}
+
+exec() {
+	command=$1
+	#hideErrors=$2
+	if [ "$2" == "true" ]; then
+		finest "$1 2> /dev/null > /dev/null"
+		$1 2> /dev/null > /dev/null
+	else
+		finest "$command"
+		$1
+	fi
+}

@@ -1,0 +1,18 @@
+#!/bin/bash
+
+device=$1
+freq=$2
+
+if [ "$1" == "" ]; then
+	echo "Usage: tcstats [network device] [refresh rate]. Ex.: 'tcstats eth0 1' -> show classes for network device eth0 and refresh it every 1 second"
+fi
+
+command="tc -s -d class show dev $device"
+
+if [ "$freq" != "" ]; then
+	watch -n $freq "$command | /etc/firewall-stutz/tccs"
+else
+	$command | /etc/firewall-stutz/tccs
+fi
+
+exit $?

@@ -1,0 +1,32 @@
+#!/bin/bash
+#
+
+BASE_DIR="/etc/firewall-stutz"
+source $BASE_DIR/logging
+source $BASE_DIR/functions
+source $BASE_DIR/map.sh
+
+fine "Activating default gateways found in 'alive' dir..."
+
+for gateway in $BASE_DIR/gateways-tester/alive/*
+do
+	if [ -f $gateway -a -a $gateway ]; then
+		finest "Found alive interface $gateway"
+		source $gateway
+	fi
+done
+
+finer "Calculating ip command for found gateways..."
+gatewaysCommand=""
+map interfaceGatewayDefinitions | while read key value; do
+	key=${key//\"/}
+	value=${value//\"/}
+	if [ "$gatewaysCommand" == "" ]; then
+		gatewaysCommand="ip route add default scope global"
+	fi
+	gatewaysCommand="$gatewaysCommand $value"
+	finest "Command for $key: $value"
+	exec "ip route del default" true
+	exec "$gatewaysCommand"
+done
+

@@ -1,0 +1,53 @@
+#!/bin/bash
+#
+
+BASE_DIR="/etc/firewall-stutz"
+source $BASE_DIR/logging
+source $BASE_DIR/map.sh
+
+setLogLevel $LOG_LEVEL_ALL
+
+info "Pinging gateways marked as dead..."
+
+fine "Looking for interface gateways marked as dead..."
+for gateway in $BASE_DIR/gateways-tester/dead/*
+do
+	if [ -f $gateway -a -a $gateway ]; then
+		finest "Found dead interface $gateway"
+		source $gateway
+	fi
+done
+
+
+map interfacePingIps | while read key value; do
+	interfaceName=${key//\"/}
+	pingIp=${value//\"/}
+	interfaceGateway=$(map interfaceGateways[$interfaceName])
+
+	#when map is empty, it performs one 'empty' iteration
+	if [ "$interfaceName" != "" ]; then
+
+		if [ "$interfaceGateway" != "" ]; then
+			fine "Creating a temporary gateway through interface $interfaceName for $pingIp"
+			exec "ip route add $pingIp via $interfaceGateway"
+		fi
+
+		fine "Pinging $pingIp through interface $interfaceName..."
+		ping -q -c2 -W5 -I $interfaceName $pingIp > /dev/null
+
+		if [ "$?" -eq 0 ]; then
+			fine "Ping succeeded. Marking $interfaceName gateway as alive"
+			exec "mv $BASE_DIR/gateways-tester/dead/$interfaceName $BASE_DIR/gateways-tester/alive/"
+			$BASE_DIR/gateways-tester/activate-alive-gateways
+			echo "$(date) $interfaceName is UP" >> /var/log/gateways-tester.log
+		else
+			finest "Ping failed. $interfaceName gateway will remain as dead"
+		fi
+
+		if [ "$interfaceGateway" != "" ]; then
+			fine "Deleting temporary gateway through interface $interfaceName for $pingIp"
+			exec "ip route del $pingIp via $interfaceGateway"
+		fi
+
+	fi
+done

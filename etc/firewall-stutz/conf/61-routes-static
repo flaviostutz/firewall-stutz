@@ -1,0 +1,47 @@
+# STATIC ROUTES
+
+if [ $start -eq 1 ]; then
+	echo "Configuring static routes..."
+
+	# force DNS queries through correct ISP
+	# GVT
+	ip route add 200.75.82.139 via $WAN1_GATEWAY_ADDR
+	ip route add 200.75.5.139 via $WAN1_GATEWAY_ADDR
+	
+	# Oi
+	ip route add 201.10.28.3 via $WAN2_GATEWAY_ADDR
+	ip route add 201.0.1.3 via $WAN2_GATEWAY_ADDR
+
+
+	# use GVT for Webex communications
+	ip route add 66.163.32.0/19 via $WAN1_GATEWAY_ADDR
+	ip route add 209.197.192.0/19 via $WAN1_GATEWAY_ADDR
+	ip route add 173.243.12.0/24 via $WAN1_GATEWAY_ADDR
+
+ 
+	# THE FOLLOWING WAS WORKING, BUT WAS REPLACED BY HOST TO HOST STATIC CONFIG in REGULAR OPENVPN CONFIGURATION
+	# VPNs ROUTING
+	# VPN 1-2voip
+#	ip route add default via 10.28.3.254 table 222
+#	ip rule add from all fwmark 22 table 222 
+	#route all udp packages through this tunnel
+#	iptables -A PREROUTING -t mangle -d 10.20/16 -p udp -j MARK --set-mark 22
+	#route ping request/response through this tunnel
+#	iptables -A PREROUTING -t mangle -d 10.20/16 -p icmp --icmp-type 0 -j MARK --set-mark 22
+#	iptables -A PREROUTING -t mangle -d 10.20/16 -p icmp --icmp-type 8 -j MARK --set-mark 22
+#	iptables -A OUTPUT -t mangle -d 10.20/16 -p icmp --icmp-type 0 -j MARK --set-mark 22
+#	iptables -A OUTPUT -t mangle -d 10.20/16 -p icmp --icmp-type 8 -j MARK --set-mark 22
+
+	# VPN 1-2 
+#	ip route add default via 10.29.3.254 table 111
+#	ip rule add from all fwmark 11 table 111 
+	#route all remaining packages through this tunnel (packages that weren`t marked by rules above)
+#	iptables -A PREROUTING -t mangle -d 10.20/16 -m mark --mark 0 -j MARK --set-mark 11
+
+	# Asterix server outgoing connection using own public address
+#	ip rule add from 10.10.2.51 table 333 
+#	ip route add default dev $WAN3_IFACE table 333
+
+#	ip rule add from 10.10.2.52 table 444 
+#	ip route add default dev $WAN4_IFACE table 444
+fi

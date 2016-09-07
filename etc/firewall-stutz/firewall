@@ -1,0 +1,172 @@
+#!/bin/bash
+
+# Stutz Appliances Firewall
+# author: Flávio Stutz (flaviostutz@gmail.com)
+
+BASE_DIR="/etc/firewall-stutz"
+LOCK_FILE="/var/lock/firewall-stutz"
+source $BASE_DIR/functions
+source $BASE_DIR/map.sh
+source $BASE_DIR/logging
+
+# SERVICE FUNCTIONS
+start() {
+	setLogLevel LOG_LEVEL_INFO
+	warn ">> ENABLING FIREWALL (Stutz Appliances)"
+
+	# clear routes and route rules
+	#ip route flush all # IF WE DO THIS, eth won't work...
+	#service openvpn restart
+	clearDefaultGatewaySetup
+
+	# clear iptables chains
+	resetChains
+
+	# drop everything by default
+	info "Setting up iptables to block everything..."
+	iptables -P INPUT DROP
+	iptables -P OUTPUT DROP
+	iptables -P FORWARD DROP
+
+	# RUN ALL SCRIPTS IN "/conf" DIR
+	start=1
+	#if the test flag is set, conf files marked as not executable will be executed too 
+	test=$1
+	for script in $BASE_DIR/conf/*
+	do
+		if(($test)); then
+			if [ -f $script -a -a $script ]; then
+				source $script
+			fi
+		else
+			if [ -f $script -a -a $script -a -x $script ]; then
+				source $script
+			fi
+		fi
+	done
+
+	# create lock file
+	touch $LOCK_FILE
+
+	fine "Restarting network..."
+	#/etc/init.d/networking restart
+
+	warn "FIREWALL IS ACTIVATED"
+}
+
+stop() {
+	setLogLevel LOG_LEVEL_INFO
+	warn ">> DISABLING FIREWALL (Stutz Appliances)"
+	info "Reseting all iptables chains..."
+	resetChains
+
+	start=0
+	for script in $BASE_DIR/conf/*
+	do
+		if [ -f -a $script ]
+		then
+			source $script
+		fi
+	done
+
+	info "Removing any QoS setups..."
+	for i in $(netstat -i | cut -d " " -f 1); do
+		exec "clearInterfaceQoS $i"
+	done
+
+	info "Removing default gateways..."
+	clearDefaultGatewaySetup
+	#ip route del default
+
+	# accept everything by default
+	info "Setting up iptables to accept everything..."
+	iptables -P INPUT ACCEPT
+	iptables -P OUTPUT ACCEPT
+	iptables -P FORWARD ACCEPT
+
+	# remove lock file
+	rm -f $LOCK_FILE
+	warn "FIREWALL IS DEACTIVATED. ALL TRAFFIC IS ALLOWED."
+}
+
+resetChains() {
+	# flush all chains
+	chains=`cat /proc/net/ip_tables_names 2>/dev/null`
+	iptables -F
+	for i in $chains; do iptables -t $i -F; done
+	# zero counters
+	for i in $chains; do iptables -t $i -Z; done
+	# delete chains
+	for i in $chains; do iptables -t $i -X; done
+}
+
+
+case "$1" in
+  start)
+	start
+	;;
+
+  start-test)
+	start 1
+	;;
+
+  stop)
+	stop
+	;;
+
+  restart)
+	# "restart" is really just "start" as this isn't a daemon,
+	#  and "start" clears any pre-defined rules anyway.
+	#  This is really only here to make those who expect it happy
+	stop
+	start
+	;;
+
+  restart-test)
+	stop
+	start 1
+	;;
+
+  condrestart)
+	[ -e /var/lock/subsys/iptables ] && start
+	;;
+
+  status)
+	if [ -e $LOCK_FILE ]; then
+		info "==========================================================="
+#		iptables -L -v -n
+		tables=`cat /proc/net/ip_tables_names 2>/dev/null`
+		for table in $tables; do
+			echo $"Table: $table"
+			iptables -t $table --list -v
+		done
+		info "==========================================================="
+		info "FIREWALL IS ACTIVATED"
+	else
+		info "FIREWALL IS DEACTIVATED"
+	fi
+	;;
+
+  panic)
+	echo "Changing filter policies to DROP EVERYTHING:"
+	resetChains
+	iptables -A INPUT -j DROP
+	iptables -A OUTPUT -j DROP
+	iptables -A FORWARD -j DROP
+	;;
+
+  save)
+	start
+	echo -n $"Saving current rules to 'iptables.save'"
+	touch $BASE_DIR/iptables.save
+	chmod 600 $BASE_DIR/iptables.save
+	iptables-save -c > $BASE_DIR/iptables.save
+	echo
+	;;
+
+  *)
+	echo $"Usage: $0 {start|stop|restart|condrestart|status|panic|save}"
+	exit 1
+esac
+
+exit 0

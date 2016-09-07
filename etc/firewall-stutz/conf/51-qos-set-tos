@@ -1,0 +1,22 @@
+#!/bin/bash
+
+# Stutz Appliances Firewall
+# author: Flávio Stutz (flaviostutz@gmail.com)
+
+#BASE_DIR="/etc/firewall-stutz"
+source $BASE_DIR/functions
+source $BASE_DIR/map.sh
+
+
+# SET TOS FLAG FOR PACKETS
+
+if [ $start -eq 1 ]; then
+	echo "Setting TOS flag for some packets..."
+
+	#VPN tosite2voip RJ
+	#setTOSForOutgoingPackets $TOS_MINIMIZE_DELAY 177.43.182.18 $WAN1_IFACE udp 0 3202
+
+	#VPN PPTP
+	#setTOSForOutgoingPackets $TOS_MINIMIZE_DELAY 0/0 $WAN1_IFACE 47
+
+fi

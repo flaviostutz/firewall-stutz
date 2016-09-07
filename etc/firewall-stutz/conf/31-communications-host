@@ -1,0 +1,82 @@
+# FIREWALL HOST CONFIGURATION
+
+if [ $start -eq 1 ]; then
+	echo "Configuring IN/OUT packets for firewall host..."
+
+	# enable SSH from hosts
+	enableINPUTPacket 0/0 22 eth0 tcp
+	enableINPUTPacket 0/0 22 $ANY_IFACE tcp
+#	enableINPUTPacket 0/0 22 $SRV_IFACE tcp
+#	enableINPUTPacket 0/0 22 $LAN1_IFACE tcp
+#	enableINPUTPacket 0/0 22 $USERVPN1_IFACE tcp
+#	enableINPUTPacket 0/0 22 $USERVPN2_IFACE tcp
+
+	# enable Webmin from hosts
+	enableINPUTPacket 0/0 10000 $DMZ_IFACE tcp
+	enableINPUTPacket 0/0 10000 $LAN1_IFACE tcp
+	enableINPUTPacket 0/0 10000 $USERVPN1_IFACE tcp
+	enableINPUTPacket 0/0 10000 $USERVPN2_IFACE tcp
+#	enableINPUTPacket 0/0 10000 $WAN1_IFACE tcp
+
+	# enable traffic view from hosts
+	enableINPUTPacket 0/0 3000 $DMZ_IFACE tcp
+	enableINPUTPacket 0/0 3000 $LAN1_IFACE tcp
+	enableINPUTPacket 0/0 3000 $USERVPN1_IFACE tcp
+	enableINPUTPacket 0/0 3000 $USERVPN2_IFACE tcp
+#	enableINPUTPacket 0/0 3000 $WAN1_IFACE tcp
+
+	# enable DNS queries
+	enableINPUTPacket 0/0 53 $ANY_IFACE tcp
+	enableINPUTPacket 0/0 53 $ANY_IFACE udp
+#	enableINPUTPacket 0/0 53 $USERVPN1_IFACE tcp
+#	enableINPUTPacket 0/0 53 $USERVPN1_IFACE udp
+#	enableINPUTPacket 0/0 53 $USERVPN2_IFACE tcp
+#	enableINPUTPacket 0/0 53 $USERVPN2_IFACE udp
+
+	# enable DHCP requests
+	enableINPUTPacket 0/0 67:68 $ANY_IFACE udp
+
+	# enable firewall to ping other hosts
+	enableOUTPUTICMPPacket echo-request
+
+	# enable firewall to be pinged
+	enableINPUTICMPPacket echo-request
+
+	# enable traceroute
+	enableOUTPUTPacket 0/0 33434:33523 udp $ANY_IFACE
+
+	# enable firewall to access an external DNS
+	enableOUTPUTPacket 0/0 53 tcp $ANY_IFACE
+	enableOUTPUTPacket 0/0 53 udp $ANY_IFACE
+
+	# enable iperf tests 
+	enableINPUTPacket 0/0 5001 $ANY_IFACE
+	
+        # enable OpenVPN for users
+	enableINPUTPacket 0/0 3333 $ANY_IFACE tcp
+
+	# enable PPTP VPN
+	enableINPUTPacket 0/0 1723 $ANY_IFACE tcp
+	enableINPUTPacket 0/0 0 $ANY_IFACE 47
+
+	# enable RJ VPNs
+	enableINPUTPacket 0/0 3102 $ANY_IFACE udp
+	enableINPUTPacket 0/0 3202 $ANY_IFACE udp
+
+	# enable SM VPNs
+	enableINPUTPacket 0/0 3103 $ANY_IFACE udp
+	enableINPUTPacket 0/0 3203 $ANY_IFACE udp
+
+	# enable BH VPNs
+	enableINPUTPacket 0/0 3104 $ANY_IFACE udp
+	enableINPUTPacket 0/0 3204 $ANY_IFACE udp
+
+	# enable firewall to send any packet to other hosts
+	enableOUTPUTPacket 0/0
+
+	# ignore configuration above. everything is permitted
+#	enableINPUTPacket 0/0
+#	enableOUTPUTPacket 0/0
+
+fi
+

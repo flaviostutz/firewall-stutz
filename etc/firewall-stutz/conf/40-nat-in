@@ -1,0 +1,50 @@
+# NAT 'SERVER' CONFIGURATIONS
+
+if [ $start -eq 1 ]; then
+	echo "Configuring NAT for incoming packets..."
+
+        #setupNATPortForwarding
+           #setupDestinationPortPart $1
+           #internalHostIp=$2
+           #setupSourceInterfacePart $3
+           #internalHostPort=$4
+           #protocol=$5
+
+	#ESXi
+	#setupNATPortForwarding 902 192.168.12.1 $WAN1_IFACE
+	#setupNATPortForwarding 443 192.168.12.1 $WAN1_IFACE
+
+	#OpenVPN from 443 port (for being used through http proxy)
+	#setupNATPortForwarding 443 192.168.1.254 $WAN1_IFACE 3333
+	# se colocar esse critério dá problema em sites seguros
+	#iptables -t nat -A PREROUTING -p TCP --dport 443 -j REDIRECT --to-port 3333
+
+	#A580 VOIP forwardings
+	#setupNATPortForwarding 5060:5076 10.10.1.10 $WAN1_IFACE
+	#setupNATPortForwarding 5004:5020 10.10.1.10 $WAN1_IFACE
+
+	#CPPro forwardings
+	#setupNATPortForwarding 80 172.16.10.53 $WAN1_IFACE
+	setupNATPortForwarding 80:86 172.16.10.53 $WAN1_IFACE
+	setupNATPortForwarding 100 172.16.10.53 $WAN1_IFACE
+	setupNATPortForwarding 21 172.16.10.53 $WAN1_IFACE
+
+	#Remote desktop to CPPro server
+	#setupNATPortForwarding 3389 172.16.10.53 $WAN1_IFACE
+
+        #External access to CPPro SQL Server database
+        setupNATPortForwarding 1433 172.16.10.53 $WAN1_IFACE
+
+	#Extranet forwardings
+	#setupNATPortForwarding 80 192.168.10.51 $WAN1_IFACE
+
+	#Analytics server
+	setupNATPortForwarding 8080 172.16.10.55 $WAN1_IFACE 80
+	setupNATPortForwarding 2222 172.16.10.55 $WAN1_IFACE 22
+	setupNATPortForwarding 11000 172.16.10.55 $WAN1_IFACE
+
+	#Asterix NAT inbound
+	#setupNATPortForwarding 21:65000 10.10.2.51 $WAN3_IFACE
+	#setupNATPortForwarding 21:65000 10.10.2.52 $WAN4_IFACE
+
+fi

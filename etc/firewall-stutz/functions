@@ -1,0 +1,646 @@
+#### CONSTANTS
+TOS_MINIMIZE_DELAY=8
+TOS_MAXIMIZE_THROUGHPUT=4
+TOS_MAXIMIZE_RELIABILITY=2
+TOS_MINIMIZE_COST=1
+TOS_NORMAL=0
+
+#### Enable packets in chains
+enableINPUTPacket() {
+	setupSourceIpPart $1
+	setupDestinationPortPart $2
+	setupSourceInterfacePart $3
+	setupProtocolPart $4
+
+	# ENABLE INCOMING PACKET
+	if [ "$sourceIpPart" ]; then
+		iptables -A INPUT $protocolPart $destinationPortPart $sourceIpPart $sourceInterfacePart -j ACCEPT
+	else
+		error "enableINPUTPacket(): Source ip must be defined"
+	fi
+}
+enableOUTPUTPacket() {
+	setupDestinationIpPart $1
+	setupDestinationPortPart $2
+	setupProtocolPart $3
+	setupDestinationInterfacePart $4
+
+	# ENABLE OUTPUT PACKET
+	if [ "$destinationIpPart" ]; then
+		iptables -A OUTPUT $protocolPart $destinationIpPart $destinationPortPart $destinationInterfacePart -j ACCEPT
+	else
+		error "enableOUTPUTPacket(): A destination host must be defined"
+	fi
+}
+enableFORWARDPacket() {
+	setupSourceIpPart $1
+	setupDestinationIpPart $2
+	setupDestinationPortPart $3
+	setupProtocolPart $4
+	setupSourceInterfacePart $5
+	setupDestinationInterfacePart $6
+	setupSourcePortPart $7
+
+	# ENABLE PACKET FORWARDING BETWEEN SUBNETS
+	if [ "$sourceIpPart" ]; then
+		iptables -A FORWARD $protocolPart $sourceIpPart $destinationIpPart $destinationPortPart $sourceInterfacePart $destinationInterfacePart $sourcePortPart -j ACCEPT
+	else
+		error "enableFORWARDPacket(): A source IP must be defined"
+	fi
+}
+
+
+
+enableINPUTICMPPacket() {
+	icmpType=$1
+	setupSourceIpPart $2
+	setupSourceInterfacePart $3
+
+	# ENABLE OUTPUT PACKET
+	if [ "$icmpType" ]; then
+		iptables -A INPUT -p icmp --icmp-type $icmpType $sourceIpPart $sourceInterfacePart -j ACCEPT
+	else
+		error "enableINPUTICMPPacket(): 'icmpType' must be defined"
+	fi
+}
+enableOUTPUTICMPPacket() {
+	icmpType=$1
+	setupDestinationIpPart $2
+	setupDestinationInterfacePart $3
+
+	# ENABLE OUTPUT PACKET
+	if [ "$icmpType" ]; then
+		iptables -A OUTPUT -p icmp --icmp-type $icmpType $destinationIpPart $destinationInterfacePart -j ACCEPT
+	else
+		error "enableOUTPUTICMPPacket(): 'icmpType' must be defined"
+	fi
+}
+enableFORWARDICMPPacket() {
+	icmpType=$1
+	setupSourceIpPart $2
+	setupDestinationIpPart $3
+	setupSourceInterfacePart $4
+	setupDestinationInterfacePart $5
+
+	# ENABLE OUTPUT PACKET
+	if [ "$icmpType" ]; then
+		iptables -A OUTPUT -p icmp --icmp-type $icmpType $destinationIpPart $destinationInterfacePart $sourceIpPart $sourceInterfacePart -j ACCEPT
+	else
+		error "enableOUTPUTICMPPacket(): 'icmpType' must be defined"
+	fi
+}
+
+
+
+
+# setup NAT for forwarding incoming packets from another network to host on local network
+setupNATPortForwarding() {
+	setupDestinationPortPart $1
+	internalHostIp=$2
+	setupSourceInterfacePart $3
+	internalHostPort=$4
+	protocol=$5
+
+	if [ "$internalHostPort" == "" ]; then
+		internalHostPort="$1"
+	fi
+
+	if [ "$protocol" != "tcp" -a "$protocol" != "udp" ]; then
+		protocol="all"
+	fi
+
+	# replace ":" by "-" for destination port
+	internalHostPort2=${internalHostPort//:/-}
+
+	if [ "$destinationPortPart" -a "$internalHostIp" ]; then
+		# enable packet forwarding and
+		# change packet destination to a internal network host
+		if [ "$protocol" == "tcp" -o "$protocol" == "all" ]; then
+			exec "iptables -A FORWARD -p tcp -m multiport $sourceInterfacePart -d $internalHostIp --dport $internalHostPort -j ACCEPT"
+			exec "iptables -t nat -A PREROUTING -m multiport -p tcp $sourceInterfacePart $destinationPortPart -j DNAT --to $internalHostIp:$internalHostPort2"
+		fi
+		if [ "$protocol" == "udp" -o "$protocol" == "all" ]; then
+			exec "iptables -A FORWARD -p udp -m multiport $sourceInterfacePart -d $internalHostIp --dport $internalHostPort -j ACCEPT"
+			exec "iptables -t nat -A PREROUTING -m multiport -p udp $sourceInterfacePart $destinationPortPart -j DNAT --to $internalHostIp:$internalHostPort2"
+		fi
+	else
+		error "setupNATPortForwarding(): Destination port, destination IP and source interface must be defined"
+	fi
+}
+
+# setup NAT table for packets sent to another network
+setupNATOutgoingPackets() {
+	setupDestinationInterfacePart $1
+	setupSourceIpPart $2
+	setupDestinationIpPart $3
+
+	if [ "$destinationInterfacePart" ]; then
+		si=$2
+		di=$3
+		if [ "$si" == "" ]; then
+			si=0/0
+		fi
+		if [ "$di" == "" ]; then
+			di=0/0
+		fi
+		# enable packet forwarding
+		enableFORWARDPacket $si $di 0 all 0 $1
+		# update nat tables
+		iptables -t nat -A POSTROUTING $sourceIpPart $destinationInterfacePart $destinationIpPart -j MASQUERADE
+	else
+		error "setupNATOutgoingPackets(): Source IP and destination interface must be defined"
+	fi
+}
+
+
+# set TOS bits of a matching outgoing packet
+setTOSForOutgoingPackets() {
+	tosValue=$1
+	setupDestinationIpPart $2
+	setupDestinationInterfacePart $3
+	protocol=$4
+	setupDestinationPortPart $5
+	setupSourcePortPart $6
+
+	if [ "$protocol" == "" ]; then
+		protocol="tcp"
+	fi
+	setupProtocolPart $protocol
+
+	if [ "$destinationIpPart" != "" ]; then
+		# set TOS bits
+		finest "iptables -t mangle -A POSTROUTING $destinationInterfacePart $destinationIpPart $destinationPortPart -j TOS --set-tos $tosValue"
+		iptables -t mangle -A POSTROUTING $destinationInterfacePart $destinationIpPart $protocolPart $destinationPortPart $sourcePortPart -j TOS --set-tos $tosValue
+
+		#set DSCP field too for LOW LATENCY applications
+		if [ "$tosValue" == "$TOS_MINIMIZE_DELAY" ]; then
+			iptables -t mangle -A POSTROUTING $destinationInterfacePart $destinationIpPart $protocolPart $destinationPortPart $sourcePortPart -j DSCP --set-dscp-class EF
+			
+		fi
+
+	else
+		error "setTOSForOutgoingPackets(): Destination ip is required"
+	fi
+}
+
+
+
+# Setup traffic bandwidth limits (QoS)
+htbClassCounter=1
+ifbInterfaceCounter=0
+#interfacesRootClass[]
+#interfacesRootClass[]
+#interfacesIfbInput[]
+clearInterfaceQoS() {
+	ifaceName=$1
+	fine "Clearing QoS configurations for $ifaceName..."
+	exec "tc qdisc del dev $ifaceName root" true
+	exec "tc qdisc del dev $ifaceName ingress" true
+}
+setupInterfaceQoS() {
+	interfaceName=$1
+
+	# interface total bandwidth limits
+	maxInputBandwidthPart=$(getMinBandwidthPart $2)
+	maxOutputBandwidth=$(getMinBandwidthPart $3)
+
+	# unclassified bandwidth limits
+	maxUnclassifiedBandwidthPercent=$4
+	if [ "$maxUnclassifiedBandwidthPercent" == "" ]; then
+		maxUnclassifiedBandwidthPercent=70
+	fi
+
+
+	clearInterfaceQoS $interfaceName
+	fine "PREPARING INTERFACE $interfaceName FOR QoS (MAX IN:$2kbps MAX OUT:$3kbps)"
+	modprobe ifb numifbs=20
+
+	maxInputUnclass=$(calculatePercentage $2 $maxUnclassifiedBandwidthPercent)
+	maxInputUnclassifiedBandwidthPart=$(getMaxBandwidthPart $maxInputUnclass)
+	maxOutputUnclass=$(calculatePercentage $3 $maxUnclassifiedBandwidthPercent)
+	maxOutputUnclassifiedBandwidthPart=$(getMaxBandwidthPart $maxOutputUnclass)
+	finer "Max unclassified traffic input/output bandwidth for $interfaceName will be $maxInputUnclass/$maxOutputUnclass" kbps
+
+
+	#OUTPUT TRAFFIC
+	interfaceRootClass="$htbClassCounter"
+	finer "OUTPUT: Creating root class $interfaceRootClass: for $interfaceName..."
+	map interfacesRootClass[$interfaceName]=$interfaceRootClass
+
+	# root class
+	exec "tc qdisc add dev $interfaceName root handle $htbClassCounter: htb default 99"
+
+
+	# class child :1 with max bandwidth
+	finer "OUTPUT: Creating class $interfaceRootClass:1 with max bandwidth of $3kbit for $interfaceName..."
+	exec "tc class add dev $interfaceName parent $interfaceRootClass: classid $interfaceRootClass:1 htb $maxOutputBandwidth"
+	exec "tc qdisc add dev $interfaceName parent $interfaceRootClass:1 handle ${interfaceRootClass}1: sfq perturb 10"
+
+	# class child :99 for default bandwidth
+	finer "OUTPUT: Creating class $interfaceRootClass:99 with max bandwidth of $maxOutputUnclassifiedBandwidthPart for $interfaceName..."
+	exec "tc class add dev $interfaceName parent $interfaceRootClass:1 classid $interfaceRootClass:99 htb rate 1kbit $maxOutputUnclassifiedBandwidthPart prio 99"
+	exec "tc qdisc add dev $interfaceName parent $interfaceRootClass:99 handle ${interfaceRootClass}99: sfq perturb 10"
+
+	htbClassCounter=$(($htbClassCounter+1))
+
+
+
+	#INPUT TRAFFIC
+	ifbInterfaceName=ifb$ifbInterfaceCounter
+	clearInterfaceQoS $ifbInterfaceName
+
+	finer "INPUT: Creating ifb interface ($ifbInterfaceName) for interface input shaping..."
+	exec "ip link set up $ifbInterfaceName"
+	map interfacesIfbInput[$interfaceName]=$ifbInterfaceName
+	ifbInterfaceCounter=$(($ifbInterfaceCounter+1))
+
+	interfaceRootClass="$htbClassCounter"
+	finer "INPUT: Creating root class $interfaceRootClass: for $ifbInterfaceName..."
+	map interfacesRootClass[$ifbInterfaceName]=$interfaceRootClass
+
+	# root class
+	exec "tc qdisc add dev $ifbInterfaceName root handle $htbClassCounter: htb default 99"
+
+	# class child :1 with max bandwidth
+	finer "INPUT: Creating class $interfaceRootClass:1 with max bandwidth of $2kbit for $ifbInterfaceName..."
+	exec "tc class add dev $ifbInterfaceName parent $interfaceRootClass: classid $interfaceRootClass:1 htb $maxInputBandwidthPart"
+	exec "tc qdisc add dev $ifbInterfaceName parent $interfaceRootClass:1 handle ${interfaceRootClass}1: sfq perturb 10"
+
+	# class child :99 for default bandwidth
+	finer "INPUT: Creating class $interfaceRootClass:99 with max bandwidth of $maxInputUnclassifiedBandwidthPart for $ifbInterfaceName..."
+	exec "tc class add dev $ifbInterfaceName parent $interfaceRootClass:1 classid $interfaceRootClass:99 htb rate 1kbit $maxInputUnclassifiedBandwidthPart prio 99"
+	exec "tc qdisc add dev $ifbInterfaceName parent $interfaceRootClass:99 handle ${interfaceRootClass}99: sfq perturb 10"
+
+	htbClassCounter=$(($htbClassCounter+1))
+
+
+	# overall ingress bandwidth control
+	exec "tc qdisc add dev $interfaceName handle ffff: ingress"
+
+
+	# LOOP INPUT TRAFFIC TO IFB INTERFACE for interface INPUT bandwidth control
+	# drop TCP packets in ingress queue that are coming too fast in order to avoid queues in ISP (they tend to keep it huge in order to optimize downloads, but we want the queues to be only in our box to avoid uncontrolable latency)
+	# TODO: limit to 97% of max to avoid queues in ISP
+	#finest "tc filter add dev $interfaceName parent ffff: protocol ip prio 1 u32 match ip protocol 0x6 0xff police rate ${maxIn}kbit burst 10k drop action mirred egress redirect dev $ifbInterfaceName"
+	#tc filter add dev $interfaceName parent ffff: protocol ip prio 1 u32 match ip protocol 0x6 0xff police rate ${maxIn}kbit burst 10k drop action mirred egress redirect dev $ifbInterfaceName
+
+	maxIn=$(calculatePercentage ${2} 60)
+#FIXME PARECE QUE O LIMITADOR NAO ESTAH FUNCIONANDO
+	finer "Looping all incoming traffic from $interfaceName through $ifbInterfaceName for input QoS"
+	exec "tc filter add dev $interfaceName parent ffff: protocol ip prio 2 u32 match u32 0 0 flowid 99:99 \
+		action mirred egress redirect dev $ifbInterfaceName \
+		police rate ${maxIn}kbit burst 20k drop"
+
+}
+
+#setupVLANOnInterface() {
+#	interfaceName=$1
+#	vlanNumber=$2
+#	interfaceIp=$3
+#	interfaceMask=$4
+#	if [ "$interfaceMask" == "" ]; then
+#		interfaceMask="255.255.255.0"
+#	fi
+#	if [ "$interfaceName" != "" -a "$interfaceIp" != "" -a "$vlanNumber" != "" ]; then
+#		#remove vlan interface
+#		exec "ifconfig ${interfaceName}.${vlanNumber} down" true
+#		exec "vconfig rem ${interfaceName}.${vlanNumber}" true
+#		#create vlan interface
+#		exec "vconfig add $interfaceName $vlanNumber"
+#		exec "ifconfig ${interfaceName}.${vlanNumber} ${interfaceIp} netmask ${interfaceMask} up"
+#		exec "vconfig set_flag ${interfaceName}.${vlanNumber} 1"
+#	else
+#		warn "setupVLANOnInterface(): interfaceName, interfaceIp and vlanNumber is required by this function"
+#	fi
+#}
+
+setupInterfaceInputQoS() {
+	#interfaceName,minInputBandwidth,maxInputBandwidth,sourcePort,destinationPort,sourceIp,destinationIp,protocol,maxPacketSize,tos,borrowPriority,customTCMatch
+	intName=$1
+
+	#lookup IFB interface related to this interface, so that its output setup will control this interface's input
+	ifbInterfaceName=$(map interfacesIfbInput["$intName"])
+
+	if [ "$ifbInterfaceName" != "" ]; then
+		#setup related IFB interface for output limiting
+		finer "CREATING INPUT QoS RULE FOR $intName (INPUT MIN:$2kbps/MAX:$3kbps) - through $ifbInterfaceName"
+		setupInterfaceOutputQoSPrivate $ifbInterfaceName $2 $3 $4 $5 $6 $7 $8 $9 ${10} ${11}
+	else
+		error "setupInterfaceInputQoS(): Setup interface $interfaceName with 'setupInterfaceQoS()' before calling this function"
+	fi
+}
+
+setupInterfaceOutputQoS() {
+	#interfaceName,minOutputBandwidth,maxOutputBandwidth,sourcePort,destinationPort,sourceIp,destinationIp,protocol,maxPacketSize,tos,borrowPriority,customTCMatch
+	finer "CREATING OUTPUT QoS RULE FOR $1 (INPUT MIN:$2kbps/MAX:$3kbps)"
+	setupInterfaceOutputQoSPrivate $1 $2 $3 $4 $5 $6 $7 $8 $9 ${10} ${11}
+}
+
+setupInterfaceOutputQoSPrivate() {
+	#interfaceName,minOutputBandwidth,maxOutputBandwidth,sourcePort,destinationPort,sourceIp,destinationIp,protocol,maxPacketSize,tos,borrowPriority,customTCMatch
+	interfaceName=$1
+	minBandwidthKbitPart=$(getMinBandwidthPart $2)
+	maxBandwidthKbitPart=$(getMaxBandwidthPart $3)
+	sourcePortTCPart=$(getSourcePortTCPart $4)
+	destinationPortTCPart=$(getDestinationPortTCPart $5)
+	sourceIpTCPart=$(getSourceIpTCPart $6)
+	destinationIpTCPart=$(getDestinationIpTCPart $7)
+	protocolTCPart=$(getProtocolTCPart $8)
+	maxPacketSizeTCPart=$(getTCMatchForMaxPacketSize $9)
+	tosTCPart=$(getTOSTCPart ${10})
+	bandwidthBorrowPriorityPart=$(getBorrowPriorityPart ${11})
+
+	#lookup interface setup
+	interfaceRootClass=$(map interfacesRootClass["$interfaceName"])
+
+	# CREATE HTB CLASS FOR THIS TRAFFIC
+	finer "Creating class for $interfaceName (INPUT MIN:$2kbps/MAX:$3kbps; class=$interfaceRootClass:$htbClassCounter)"
+	exec "tc class add dev $interfaceName parent $interfaceRootClass:1 classid $interfaceRootClass:$htbClassCounter htb $minBandwidthKbitPart $maxBandwidthKbitPart $bandwidthBorrowPriorityPart"
+	exec "tc qdisc add dev $interfaceName parent $interfaceRootClass:$htbClassCounter handle $interfaceRootClass$htbClassCounter: sfq perturb 10"
+
+	# MARK PACKETS
+	#iptables -t mangle -A POSTROUTING $protocolPart $sourceIpPart $destinationIpPart $destinationPortPart $sourceInterfacePart $destinationInterfacePart -j CLASSIFY --set-class $interfaceRootClass:$htbClassCounter
+
+	flowid=$interfaceRootClass:$htbClassCounter
+	exec "tc filter add dev $interfaceName parent $interfaceRootClass: prio $htbClassCounter protocol ip u32 \
+		$sourceIpTCPart \
+		$destinationPortTCPart \
+		$sourcePortTCPart \
+		$destinationIpTCPart \
+		$protocolTCPart \
+		$maxPacketSizeTCPart \
+		$tosTCPart \
+		$customTCMatch \
+		flowid $flowid"
+
+	htbClassCounter=$(($htbClassCounter+1))
+}
+
+
+
+##### DEFAULT GATEWAY FUNCTIONS #######
+routingTableCounter=0
+currentAddDefaultGatewaysCommand=""
+
+clearDefaultGatewaySetup() {
+	finer "Clearing default gateway setup..."
+	exec "ip route del default"
+	exec "ip rule flush"
+	exec "ip rule add from all lookup main priority 32766"
+	exec "ip rule add from all lookup default priority 32767"
+	exec "rm -f $BASE_DIR/gateways-tester/alive/*"
+	exec "rm -f $BASE_DIR/gateways-tester/dead/*"
+}
+
+
+#interfaceRouteTables (interfaceName, routeTableNumber)
+addDefaultGateway() {
+	interfaceName=$1
+	interfaceIp=$2
+	gatewayIp=$3
+	weight=$4
+	testerPingIp=$5
+	routingTableCounter=$(($routingTableCounter+1))
+	map interfaceRouteTables[$interfaceName]=$routingTableCounter
+
+	if [ "$testerPingIp" == "" ]; then
+		testerPingIp="8.8.8.8"
+	fi
+
+	if [ "$weight" == "" ]; then
+		weight = 10
+	fi
+
+	if [ "$interfaceName" != "" -a "$interfaceIp" != "" -a "$gatewayIp" != "" ]; then
+		finer "Preparing routing tables for default gateway $interfaceName..."
+		exec "ip route flush table $routingTableCounter"
+		exec "ip route add $gatewayIp/32 dev $interfaceName src $interfaceIp table $routingTableCounter"
+		exec "ip route add $gatewayIp/32 dev $interfaceName src $interfaceIp"
+		exec "ip route add default via $gatewayIp table $routingTableCounter"
+		exec "ip rule add from $interfaceIp table $routingTableCounter"
+
+		#queries to local network should be handled by default routing tables
+		exec "ip route add throw 10.0.0.0/8 table $routingTableCounter"
+		exec "ip route add throw 192.168.0.0/16 table $routingTableCounter"
+		exec "ip route add throw 172.16.0.0/16 table $routingTableCounter"
+
+		finer "Preparing interface $interfaceName for async routing (for incoming NAT)..."
+		#Used to that incoming connections on a specific WAN gets routed out on the same gateway
+		#FIXME: THIS IS NOT WORKING WELL FOR UDP PACKETS, SO OUR NON VOIP VPNS ARE TCP BASED
+		#exec "iptables -A PREROUTING -t mangle -i $interfaceName -j CONNMARK --restore-mark"
+		#exec "iptables -A PREROUTING -i $interfaceName -m mark --mark 0 -t mangle -j MARK --set-mark $routingTableCounter"
+		#exec "iptables -A PREROUTING -i $interfaceName -t mangle -j CONNMARK --save-mark"
+
+		#TODO OPTIMIZE THIS BY REMOVING REPETITIVE VERIFICATIONS FROM CHAIN		
+		exec "iptables -A PREROUTING -t mangle -m state --state ESTABLISHED,RELATED -j CONNMARK --restore-mark"
+		exec "iptables -A OUTPUT -t mangle -m state --state ESTABLISHED,RELATED -j CONNMARK --restore-mark"
+		exec "iptables -A PREROUTING -t mangle -i $interfaceName  -m state --state NEW -j CONNMARK --set-mark $routingTableCounter"
+		exec "iptables -A PREROUTING -t mangle -m connmark --mark $routingTableCounter -j MARK --set-mark $routingTableCounter"
+		exec "iptables -A PREROUTING -t mangle -m state --state NEW -m connmark ! --mark 0 -j CONNMARK --save-mark"
+
+		#route marked packets through this gateway
+		exec "ip rule add fwmark $routingTableCounter table $routingTableCounter"
+	
+		finest "Creating gateway file $BASE_DIR/gateways-tester/alive/$interfaceName..."
+		echo -e "map interfaceGatewayDefinitions[\"$interfaceName\"]=\"nexthop via $gatewayIp dev $interfaceName weight $weight\"\nmap interfacePingIps[\"$interfaceName\"]=\"$testerPingIp\"\nmap interfaceGateways[\"$interfaceName\"]=\"$gatewayIp\"" > $BASE_DIR/gateways-tester/alive/$interfaceName
+
+		$BASE_DIR/gateways-tester/activate-alive-gateways
+	else
+		error "interfaceName, interfaceIp and gatewayIp must be defined"
+	fi
+}
+
+routePacketToWanInterface() {
+	interfaceName=$1
+	setupDestinationIpPart $2
+	setupProtocolPart $3
+	setupDestinationPortPart $4
+	setupSourcePortPart $5
+
+	routingTableCounter=$(map interfaceRouteTables["$interfaceName"])
+	
+	fine "Marking packets $2 $3 $4 $5 to be routed through $interfaceName"
+	exec "iptables -A PREROUTING $protocolPart $destinationIpPart $destinationPortPart $sourcePortPart -t mangle -j MARK --set-mark $routingTableCounter"
+}
+
+
+#### IPTABLES argument builders
+getDestinationInterfacePart() {
+	if [ "$1" != "0" -a "$1" != "" ]; then
+		echo "-o $1"
+	else
+		echo ""
+	fi
+}
+getSourceInterfacePart() {
+	if [ "$1" != "0" -a "$1" != "" ]; then
+		echo "-i $1"
+	else
+		echo ""
+	fi
+}
+setupProtocolPart() {
+	if [ "$1" != "0" -a "$1" != "" ]; then
+		protocolPart="-p $1"
+	else
+		protocolPart=""
+	fi
+}
+setupSourceInterfacePart() {
+	if [ "$1" != "0" -a "$1" != "" ]; then
+		sourceInterfacePart="-i $1"
+	else
+		sourceInterfacePart=""
+	fi
+}
+setupDestinationInterfacePart() {
+	if [ "$1" != "0" -a "$1" != "" ]; then
+		destinationInterfacePart="-o $1"
+	else
+		destinationInterfacePart=""
+	fi
+}
+setupSourceIpPart() {
+	if [ "$1" != "0" -a "$1" != "" ]; then
+		sourceIpPart="-s $1"
+	else
+		sourceIpPart=""
+	fi
+}
+setupDestinationIpPart() {
+	if [ "$1" != "0" -a "$1" != "" ]; then
+		destinationIpPart="-d $1"
+	else
+		destinationIpPart=""
+	fi
+}
+setupDestinationPortPart() {
+	if [ "$1" != "0" -a "$1" != "" ]; then
+		destinationPortPart="--dport $1"
+	else
+		destinationPortPart=""
+	fi
+}
+setupSourcePortPart() {
+	if [ "$1" != "0" -a "$1" != "" ]; then
+		sourcePortPart="--sport $1"
+	else
+		sourcePortPart=""
+	fi
+}
+
+
+
+
+###### TC argument builders
+getProtocolTCPart() {
+	if [ "$1" != "0" -a "$1" != "" ]; then
+		echo "match protocol $1"
+	else
+		echo ""
+	fi
+}
+getDestinationIpTCPart() {
+	if [ "$1" != "0" -a "$1" != "" -a "$1" != "0/0" -a "$1" != "0.0.0.0/0" ]; then
+		echo "match ip dst $1 "
+	else
+		echo ""
+	fi
+}
+getSourceIpTCPart() {
+	if [ "$1" != "0" -a "$1" != "" -a "$1" != "0/0" -a "$1" != "0.0.0.0/0" ]; then
+		echo "match ip src $1 "
+	else
+		echo ""
+	fi
+}
+getDestinationPortTCPart() {
+	#portRange (ex.: 100-200)
+	if [ "$1" != "0" -a "$1" != "" ]; then
+		range=$(getTCValueMaskForRange $1 16)
+		echo "match ip dport $range "
+	else
+		echo ""
+	fi
+}
+getSourcePortTCPart() {
+	#portRange
+	if [ "$1" != "0" -a "$1" != "" ]; then
+		range=$(getTCValueMaskForRange $1 16)
+		echo "match ip sport $range "
+	else
+		echo ""
+	fi
+}
+getProtocolTCPart() {
+	if [ "$1" != "0" -a "$1" != "" ]; then
+		# see /etc/protocols for protocol number
+		echo "match ip protocol $1 0xff "
+	else
+		echo ""
+	fi
+}
+getTOSTCPart() {
+	if [ "$1" != "0" -a "$1" != "" ]; then
+		echo "match ip tos $1 0xff "
+	else
+		echo ""
+	fi
+}
+getMaxBandwidthPart() {
+	if [ "$1" != "" ]; then
+		echo "ceil $1kbit"
+	else
+		echo ""
+	fi
+}
+getMinBandwidthPart() {
+	if [ "$1" != "" ]; then
+		echo "rate $1kbit"
+	else
+		echo ""
+	fi
+}
+getBorrowPriorityPart() {
+	if [ "$1" != "" -a "$1" != "0" ]; then
+		echo "prio $1"
+	else
+		echo ""
+	fi
+}
+
+calculatePercentage() {
+	value=$1
+	percent=$2
+	echo | echo "scale=1; $value*$percent/100" | bc
+}
+
+getTCMatchForACK() {
+	echo "match ip protocol 6 0xff \
+		match u8 0x05 0x0f at 0 \
+		match u8 0x10 0xff at 33"
+}
+getTCMatchForMaxPacketSize() {
+	packetSize=$1
+	if [ "$1" != "" ]; then
+		echo "match u16 $(getTCValueMaskForRange $packetSize 16) at 2"
+	fi
+}
+getTCValueMaskForRange() {
+	# fromValue-toValue (ex.: "0-64"), maskBitsLen (8, 16, 32...)
+	# THIS WILL WORK ONLY FOR ABSOLUTE VALUES OR RANGE DIFFS POWER OF 2 (0-64 0-1024 FIXME: 2-3 4-7 8-15 16-31 32-63 64-127 128-255...)
+	# parse range input
+	range=$(echo $1 | tr "-" " ")
+	range=($range) #transform into an array
+	fromValue=${range[0]}
+	toValue=${range[1]}
+	if [ "$toValue" == "" ]; then
+		toValue=$(echo "$fromValue+1" | bc)
+	fi
+
+	# calculate mask
+	maskBitsLen=$2
+	maskValue=$(echo "(2^$maskBitsLen)-($toValue-$fromValue)" | bc)
+	echo $fromValue 0x$(echo "ibase=10;obase=16;$maskValue" | bc)
+}
+

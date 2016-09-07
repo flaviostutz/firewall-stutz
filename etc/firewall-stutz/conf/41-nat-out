@@ -1,0 +1,22 @@
+# NAT CONFIGURATIONS FOR OUTGOING PACKETS
+
+if [ $start -eq 1 ]; then
+	echo "Configuring NAT for outgoing packets..."
+
+	# enable SRV hosts to access Internet directly
+	setupNATOutgoingPackets $WAN1_IFACE $SRV_ADDR
+	setupNATOutgoingPackets $WAN2_IFACE $SRV_ADDR
+
+	# enable DMZ hosts to access Internet directly
+	setupNATOutgoingPackets $WAN1_IFACE $DMZ_ADDR
+	setupNATOutgoingPackets $WAN2_IFACE $DMZ_ADDR
+
+	# enable LAN hosts to access Internet directly
+	setupNATOutgoingPackets $WAN1_IFACE $LAN1_ADDR
+	setupNATOutgoingPackets $WAN2_IFACE $LAN1_ADDR
+
+	# enable Elastix servers to access the Internet using their own public IP addresses
+	#setupNATOutgoingPackets $WAN3_IFACE 10.10.2.51
+	#setupNATOutgoingPackets $WAN4_IFACE 10.10.2.52
+
+fi

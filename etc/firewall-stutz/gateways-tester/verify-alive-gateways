@@ -1,0 +1,41 @@
+#!/bin/bash
+#
+
+BASE_DIR="/etc/firewall-stutz"
+source $BASE_DIR/logging
+source $BASE_DIR/map.sh
+
+setLogLevel $LOG_LEVEL_ALL
+
+info "Pinging gateways marked as alive..."
+
+fine "Looking for interface gateways marked as alive..."
+for gateway in $BASE_DIR/gateways-tester/alive/*
+do
+	if [ -f $gateway -a -a $gateway ]; then
+		finest "Found alive interface $gateway"
+		source $gateway
+	fi
+done
+
+
+
+map interfacePingIps | while read key value; do
+	interfaceName=${key//\"/}
+	pingIp=${value//\"/}
+
+	#when map is empty, it performs one 'empty' iteration
+	if [ "$interfaceName" != "" ]; then
+		fine "Pinging $pingIp through interface $interfaceName..."
+		ping -q -c2 -W5 -I $interfaceName $pingIp > /dev/null
+
+		if [ "$?" -eq 0 ]; then
+			finest "Ping succeeded. $interfaceName gateway will remain as alive"
+		else
+			fine "Ping failed. Marking $interfaceName gateway as dead"
+			exec "mv $BASE_DIR/gateways-tester/alive/$interfaceName $BASE_DIR/gateways-tester/dead/"
+			$BASE_DIR/gateways-tester/activate-alive-gateways
+			echo "$(date) $interfaceName is DOWN" >> /var/log/gateways-tester.log
+		fi
+	fi
+done

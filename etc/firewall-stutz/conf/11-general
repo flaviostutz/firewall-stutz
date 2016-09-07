@@ -1,0 +1,85 @@
+# BASIC SETUP
+
+#### SETUP KERNEL FLAGS FOR SECURITY
+setupKernelFlags() {
+	# define value if active/inactive
+	zeroWhenActive="0"
+	oneWhenActive="1"
+	if [ $1 -ne 0 ]; then
+		zeroWhenActive="1"
+	else
+		oneWhenActive="0"
+	fi
+
+	# Enable/disable response to pings
+	#echo $oneWhenActive > /proc/sys/net/ipv4/icmp_echo_ignore_all
+
+	# Avoid allocating resources until full tcp session handshake
+	echo $oneWhenActive > /proc/sys/net/ipv4/tcp_syncookies
+
+	# Disable response to broadcasts.
+	# You don't want yourself becoming a Smurf amplifier.
+	echo $oneWhenActive > /proc/sys/net/ipv4/icmp_echo_ignore_broadcasts
+
+	# Don't accept source routed packets. Attackers can use source
+	# routing to generate traffic pretending to be from inside your
+	# network, but which is routed back along the path from which
+	# it came, namely outside, so attackers can compromise your
+	#network. Source routing is rarely used for legitimate purposes.
+	# CHANGE TO ZEROWHENACTIVE AFTER FIXING PROBLEMS WITH VPN
+	#echo $zeroWhenActive > /proc/sys/net/ipv4/conf/all/accept_source_route
+	echo $oneWhenActive > /proc/sys/net/ipv4/conf/all/accept_source_route
+
+	# Disable ICMP redirect acceptance. ICMP redirects can be used
+	# to alter your routing tables, possibly to a bad end.
+	for interface in /proc/sys/net/ipv4/conf/*/accept_redirects; do
+		echo $zeroWhenActive > ${interface}
+	done
+
+	# Enable bad error message protection.
+	echo $oneWhenActive > /proc/sys/net/ipv4/icmp_ignore_bogus_error_responses
+
+	# Turn on reverse path filtering. This helps make sure that
+	# packets use legitimate source addresses, by automatically
+	# rejecting incoming packets if the routing table entry for
+	# their source address doesn't match the network interface
+	# they're arriving on. This has security advantages because
+	# it prevents so-called IP spoofing, however it can pose
+	# problems if you use asymmetric routing (packets from you
+	# to a host take a different path than packets from that host
+	# to you) or if you operate a non-routing host which has
+	# several IP addresses on different interfaces. (Note - If
+	# you turn on IP forwarding, you will also get this).
+	for interface in /proc/sys/net/ipv4/conf/*/rp_filter; do
+		# CHANGE TO ONEWHENACTIVE AFTER FIXING PROBLEMS WITH VPN
+		#echo $oneWhenActive > ${interface}
+		echo $zeroWhenActive > ${interface}
+	done
+
+	# Log spoofed packets, source routed packets, redirect packets.
+	echo $oneWhenActive > /proc/sys/net/ipv4/conf/all/log_martians
+}
+
+
+if [ $start -eq 1 ]; then
+	echo "Configuring network kernel and basic rules..."
+
+	# setup optimal kernel flags for security
+	setupKernelFlags 1
+
+	# enable ongoing conversations
+	iptables -A INPUT  -m state --state ESTABLISHED,RELATED -j ACCEPT
+	iptables -A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT
+	iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+	# drop invalid packets immediatelly
+	#iptables -A INPUT -m state --state INVALID -j DROP
+	#iptables -A FORWARD -m state --state INVALID -j DROP
+
+	# enable loopback interface
+	iptables -A INPUT -i lo -j ACCEPT
+	iptables -A OUTPUT -o lo -j ACCEPT
+else
+	echo "Cleaning network kernel rules..."
+	setupKernelFlags 0
+fi

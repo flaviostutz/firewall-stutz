@@ -1,0 +1,72 @@
+#!/bin/bash
+
+# Stutz Appliances Firewall
+# author: Flávio Stutz (flaviostutz@gmail.com)
+
+#BASE_DIR="/etc/firewall-stutz"
+source $BASE_DIR/functions
+source $BASE_DIR/map.sh
+
+
+# OUTBOUND TRAFFIC BANDWIDTH (QoS)
+
+if [ $start -eq 1 ]; then
+	#echo "Configuring bandwidth limits (QoS)..."
+
+	#TODO: Verificar se vale a pena diminuir a MTU da WAN para 256 para otimizar VoIP
+	# VoIP annotations: common max packet size: 256; tipical bandwidth per conversation: 16kbps
+
+	#echo "QoS for WAN1 ($WAN1_IFACE)..."
+	# SETUP INTERFACE FOR QoS
+	setupInterfaceQoS $WAN1_IFACE 9800 9800 90
+
+	#setupInterfaceInputQoS #interfaceName,minOutputBandwidth,maxOutputBandwidth,sourcePort,destinationPort,sourceIp,destinationIp,protocol,packetSizeRange,tos,borrowPriority,customTCMatch
+
+	# VPNs FOR VoIP CHANNELS
+	# OpenVPN to-site2-voip
+	#setupInterfaceInputQoS $WAN1_IFACE 256 1000 0 3202
+	#setupInterfaceOutputQoS $WAN1_IFACE 256 1000 3202 0
+
+	# OpenVPN to-site3-voip
+	#setupInterfaceInputQoS $WAN1_IFACE 256 1000 0 3203
+	#setupInterfaceOutputQoS $WAN1_IFACE 256 1000 3203 0
+
+	# OpenVPN to-site3
+        #setupInterfaceInputQoS $WAN1_IFACE 6000 9800 0 3103
+        #setupInterfaceOutputQoS $WAN1_IFACE 6000 9800 3103 0
+	
+        # PPTP VPN
+	#setupInterfaceInputQoS $WAN1_IFACE 64 1000 0 1723
+	#setupInterfaceOutputQoS $WAN1_IFACE 64 1000 1723 0
+	#setupInterfaceInputQoS $WAN1_IFACE 256 1000 0 0 0/0 0/0 47
+	#setupInterfaceOutputQoS $WAN1_IFACE 256 1000 0 0 0/0 0/0 47
+
+	# ICMP packets
+	#setupInterfaceOutputQoS $WAN1_IFACE 16 512 0 0 0/0 0/0 1
+	#setupInterfaceInputQoS $WAN1_IFACE 16 512 0 0 0/0 0/0 1
+
+	# DNS packets
+	#setupInterfaceInputQoS $WAN1_IFACE 16 512 53 0
+	#setupInterfaceOutputQoS $WAN1_IFACE 16 512 0 53
+
+	# ACK packets (OPTIMIZE DOWNLOAD WHILE UPLOADING)
+	#setupInterfaceInputQoS $WAN1_IFACE 64 2048 0 0 0/0 0/0 0 "0-64" 0 0 $(getTCMatchForACK)
+	#setupInterfaceOutputQoS $WAN1_IFACE 64 2048 0 0 0/0 0/0 0 "0-64" 0 0 $(getTCMatchForACK)
+
+	# REGULAR INTERNET NAVIGATION
+	#setupInterfaceInputQoS $WAN1_IFACE 1000 3000 80 0 0/0 0/0 0 "0-1024"
+	#setupInterfaceOutputQoS $WAN1_IFACE 1000 3000 0 80 0/0 0/0 0 "0-1024"
+	#setupInterfaceInputQoS $WAN1_IFACE 1000 3000 443 0 0/0 0/0 0 "0-1024"
+	#setupInterfaceOutputQoS $WAN1_IFACE 1000 3000 0 443 0/0 0/0 0 "0-1024"
+
+	# INTERNET DOWNLOAD
+	setupInterfaceInputQoS $WAN1_IFACE 1000 5000 80 0
+	setupInterfaceOutputQoS $WAN1_IFACE 1000 5000 0 80
+	setupInterfaceInputQoS $WAN1_IFACE 1000 5000 443 0
+	setupInterfaceOutputQoS $WAN1_IFACE 1000 5000 0 443
+
+        # ACESSO EXTERNO AO CP-PRO
+	setupInterfaceInputQoS $WAN1_IFACE 6000 8000 0 80
+	setupInterfaceOutputQoS $WAN1_IFACE 6000 8000 80 0
+	
+fi

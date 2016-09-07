@@ -1,0 +1,3 @@
+map interfaceGatewayDefinitions["eth0"]="nexthop via 179.185.106.161 dev eth0 weight 1"
+map interfacePingIps["eth0"]="8.8.8.8"
+map interfaceGateways["eth0"]="179.185.106.161"

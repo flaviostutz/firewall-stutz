@@ -1,0 +1,13 @@
+# DEFAULT GATEWAY ROUTES
+
+if [ $start -eq 1 ]; then
+	info "Configuring default gateway routes..."
+setLogLevel $LOG_LEVEL_ALL
+
+	# add WAN1 as default gateway
+	addDefaultGateway $WAN1_IFACE $WAN1_IFACE_ADDR $WAN1_GATEWAY_ADDR 1 8.8.8.8
+
+	# add WAN2 as default gateway
+	addDefaultGateway $WAN2_IFACE $WAN2_IFACE_ADDR $WAN2_GATEWAY_ADDR 1 8.8.8.8
+
+fi

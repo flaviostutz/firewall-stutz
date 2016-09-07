@@ -1,0 +1,4 @@
+#Run every minute
+*  *	* * *	root	/etc/firewall-stutz/gateways-tester/verify-alive-gateways
+*  *	* * *	root	/etc/firewall-stutz/gateways-tester/verify-dead-gateways
+

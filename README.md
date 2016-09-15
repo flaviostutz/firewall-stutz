@@ -1,7 +1,7 @@
 # firewall-stutz
 IPTables based firewall with various capabilities: NAT in/out, QoS, routing, multi-wan, common attack protection
 
-If you are willing to use IPTable for firewalling, this project is a good start point. I've been using this setup for almost a decade among some clients. 
+If you are willing to use IPTables for firewalling, this project is a good start point. I've been using this setup for almost a decade among some clients. 
 
 Now I recomend using PF (Packet Filter) from OpenBSD for regular firewall/router linux boxes, but for multi-wan and QoS the scripts from this repo works beatifully and will be a good use. 
 

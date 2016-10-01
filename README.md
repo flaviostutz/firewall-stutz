@@ -3,7 +3,9 @@ IPTables based firewall with various capabilities: NAT in/out, QoS, routing, mul
 
 If you are willing to use IPTables for firewalling, this project is a good start point. I've been using this setup for almost a decade among some clients. 
 
-Now I recomend using PF (Packet Filter) from OpenBSD for regular firewall/router linux boxes, but for multi-wan and QoS the scripts from this repo works beatifully and will be a good use. 
+Now I recomend using PF (Packet Filter) from OpenBSD for large firewall/router linux boxes, but for multi-wan and QoS the scripts from this repo works beatifully and will be a good use.
+
+For regular use small boxes, I've been using Mikrotik. Check out the https://github.com/flaviostutz/firewall-stutz/blob/master/mikrotik-script.rsc script that does almost everything the IPTables does.
 
 With this script I already created complex site-to-site vpns (OpenVPN) along with multi-wan support on over 5 simultaneous sites, VoIP packet prioritization (QoS) and multi-segmented networks managed by a single box.
 

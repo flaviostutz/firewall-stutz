@@ -12,18 +12,18 @@
 
 #VARIABLES
 :global wan1Interface1 "ether1-wan1"
-:global wan1Address "10.90.1.111/24"
-:global wan1Network "10.90.1.0"
-:global wan1NetworkMask "10.90.1.0/24"
-:global wan1Gateway "10.90.1.254"
+:global wan1Address "XXX.XXX.106.163/29"
+:global wan1Network "XXX.XXX.106.160"
+:global wan1NetworkMask "XXX.XXX.106.160/24"
+:global wan1Gateway "XXX.XXX.106.161"
 
 :global wan1Interface2 "ether2-wan1"
 
 :global wan2Interface1 "ether3-wan2"
-:global wan2Address "10.80.1.111/24"
-:global wan2Network "10.80.1.0"
-:global wan2NetworkMask "10.80.1.0/24"
-:global wan2Gateway "10.80.1.254"
+:global wan2Address "192.168.1.111/24"
+:global wan2Network "192.168.1.0"
+:global wan2NetworkMask "192.168.1.0/24"
+:global wan2Gateway "192.168.1.254"
 
 :global lan1Interface1 "ether4-lan1"
 :global lan1Prefix "10.1.1"
@@ -72,8 +72,8 @@ add address=$wan2Address comment="wan2" interface=$wan2Interface1 network=$wan2N
 /ip dhcp-client
 remove [ /ip dhcp-client find interface=$wan1Interface1 ]
 remove [ /ip dhcp-client find interface=$wan2Interface1 ]
-add interface=$wan1Interface1 disabled=no
-add interface=$wan2Interface1 disabled=no
+#add interface=$wan1Interface1 disabled=no
+#add interface=$wan2Interface1 disabled=no
 
 /ip firewall mangle
 remove [ /ip firewall mangle find ]
@@ -165,7 +165,7 @@ add address=$lan1Gateway name=router
 
 #1x1 Asterisk
 :global asteriskLanIp "10.1.2.5"
-:global asteriskPublicIp "179.185.106.164"
+:global asteriskPublicIp "XXX.XXX.106.164"
 /ip address
 remove [ /ip address find address="$asteriskPublicIp/29" ]
 add address="$asteriskPublicIp/29" comment="wan1 asterisk" interface=$wan1Interface1 network=$wan1Network

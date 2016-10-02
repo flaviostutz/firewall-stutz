@@ -8,6 +8,10 @@
 #  6. Change your computer cable to ether4 (now it is the lan1-master)
 #If boot fails and you lose access to the router, unplug power cable, press reset button, plug it again,
 #when USR led starts blinking, release reset button. Connect to default address 192.168.88.1 and try again.
+#
+# For each deployed router
+#  - Change WAN1 and WAN2 fixed IPs (IP->Address and IP->Route change default-gateway for to_ISP1 or to_ISP2)
+#  - Change WAN1 NAT 1x1 Asterisk IP (IP->Firewall->NAT)
 
 
 #VARIABLES
@@ -64,16 +68,16 @@ set $wan2Interface1 discover=no
 
 #WAN CONFIG (DUAL GATEWAYS)
 /ip address
-remove [ /ip address find address=$wan1Address ]
-remove [ /ip address find address=$wan2Address ]
-add address=$wan1Address comment="wan1" interface=$wan1Interface1 network=$wan1Network
-add address=$wan2Address comment="wan2" interface=$wan2Interface1 network=$wan2Network
+remove [ /ip address find address=wan1 ]
+remove [ /ip address find address=wan2 ]
+add address=$wan1Address comment="wan1" interface=wan1 network=$wan1Network
+add address=$wan2Address comment="wan2" interface=wan2 network=$wan2Network
 
 /ip dhcp-client
-remove [ /ip dhcp-client find interface=$wan1Interface1 ]
-remove [ /ip dhcp-client find interface=$wan2Interface1 ]
-#add interface=$wan1Interface1 disabled=no
-#add interface=$wan2Interface1 disabled=no
+remove [ /ip dhcp-client find interface=wan1 ]
+remove [ /ip dhcp-client find interface=wan2 ]
+#add interface=wan1 disabled=no
+#add interface=wan2 disabled=no
 
 /ip firewall mangle
 remove [ /ip firewall mangle find ]
@@ -95,8 +99,8 @@ add comment="packets from unlimited network" src-address=10.1.2.0/24 chain=forwa
 add comment="packets to unlimited network" dst-address=10.1.2.0/24 chain=forward action=mark-packet new-packet-mark=qos-unlimited-packets
 add comment="limited packets for qos" packet-mark=!qos-unlimited-packets chain=forward action=mark-packet new-packet-mark=qos-limited-packets
 
-add comment="packets from santa maria network" src-address=179.184.85.160/29 chain=forward action=mark-packet new-packet-mark=qos-sm-packets
-add comment="packets to santa maria network" dst-address=179.184.85.160/29 chain=forward action=mark-packet new-packet-mark=qos-sm-packets
+#add comment="packets from santa maria network" src-address=179.184.85.160/29 chain=forward action=mark-packet new-packet-mark=qos-sm-packets
+#add comment="packets to santa maria network" dst-address=179.184.85.160/29 chain=forward action=mark-packet new-packet-mark=qos-sm-packets
 
 /ip route
 remove [ /ip route find ]
@@ -112,6 +116,8 @@ remove [ /ip firewall filter find ]
 add chain=input comment="wan" protocol=icmp
 add chain=input comment="wan" connection-state=established,related
 add chain=input comment="enable remote management" protocol=tcp dst-port=80 action=accept
+
+add chain=input comment="enable ssh" protocol=tcp dst-port=22 action=accept
 
 add chain=input comment="enable pptp vpn" protocol=tcp dst-port=1723 action=accept
 add chain=input comment="enable pptp vpn" protocol=47 action=accept
@@ -129,15 +135,15 @@ add action=drop chain=forward comment="wan2 default forward drop" connection-nat
 #LAN CONFIG
 /ip address
 remove [ /ip address find address=$lan1Address ]
-add address=$lan1Address comment="lan" interface=$lan1Interface1 network=$lan1Network
+add address=$lan1Address comment="lan" interface=lan1 network=$lan1Network
 
 
 #LAN BANDWIDTH LIMITING FOR NON-ASTERISK TRAFFIC (QoS)
 /queue simple
 remove [ /queue simple find ]
-add name=total-max-bandwidth max-limit=8M/8M target=""
-add name=lan-users parent="total-max-bandwidth" packet-marks=qos-limited-packets max-limit=6M/6M queue=pcq-upload-default/pcq-download-default target=""
-add name=santamaria-hosts parent="total-max-bandwidth" packet-marks=qos-sm-packets max-limit=3M/3M queue=pcq-upload-default/pcq-download-default target=""
+add comment="total allowed bandwidth" name=total-max-bandwidth max-limit=8M/8M target=""
+add comment="allowed bandwidth for lan users" name=lan-users parent="total-max-bandwidth" packet-marks=qos-limited-packets max-limit=6M/6M queue=pcq-upload-default/pcq-download-default target=""
+#add comment="allowed bandwidth for santa maria hosts" name=santamaria-hosts parent="total-max-bandwidth" packet-marks=qos-sm-packets max-limit=3M/3M queue=pcq-upload-default/pcq-download-default target=""
 
 
 #LAN DHCP SERVER
@@ -163,20 +169,17 @@ remove [ /ip dns static find ]
 add address=$lan1Gateway name=router
 
 
-#1x1 Asterisk
-:global asteriskLanIp "10.1.2.5"
-:global asteriskPublicIp "179.179.106.164"
-/ip address
-remove [ /ip address find address="$asteriskPublicIp/29" ]
-add address="$asteriskPublicIp/29" comment="wan1 asterisk" interface=$wan1Interface1 network=$wan1Network
-
-#NAT
+#NAT CONFIGURATIONS
 /ip firewall nat
 remove [ /ip firewall nat find ]
+
+#NAT 1x1 Asterisk
+:global asteriskLanIp "10.1.2.5"
+:global asteriskPublicIp "179.179.106.164"
 add chain=srcnat comment="nat 1x1 asterisk" out-interface=wan1 src-address=$asteriskLanIp action=src-nat to-address=$asteriskPublicIp
 add chain=dstnat comment="nat 1x1 asterisk" in-interface=wan1 dst-address=$asteriskPublicIp action=dst-nat to-address=$asteriskLanIp
 
-#default outbound nat
+#NAT OUTBOUND
 /ip firewall nat
 add chain=srcnat comment="outbound nat wan1" out-interface=wan1 action=masquerade
 add chain=srcnat comment="outbound nat wan2" out-interface=wan2 action=masquerade
@@ -188,11 +191,11 @@ add chain=srcnat comment="outbound nat wan2" out-interface=wan2 action=masquerad
 
 #pptp vpn
 /ppp profile
-remove [ /ppp profile find ]
+remove [ /ppp profile find name=pptp-profile ]
 add name=pptp-profile local-address=default-dhcp remote-address=default-dhcp bridge=lan1
 
 /ppp secret
-remove [ /ppp secret find ]
+remove [ /ppp secret find name=admin ]
 add name=admin password="Straigh0Straigh0" profile=pptp-profile service=any
 
 /interface pptp-server server

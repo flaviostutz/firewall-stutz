@@ -12,10 +12,10 @@
 
 #VARIABLES
 :global wan1Interface1 "ether1-wan1"
-:global wan1Address "XXX.XXX.106.163/29"
-:global wan1Network "XXX.XXX.106.160"
-:global wan1NetworkMask "XXX.XXX.106.160/24"
-:global wan1Gateway "XXX.XXX.106.161"
+:global wan1Address "179.179.106.163/29"
+:global wan1Network "179.179.106.160"
+:global wan1NetworkMask "179.179.106.160/24"
+:global wan1Gateway "179.179.106.161"
 
 :global wan1Interface2 "ether2-wan1"
 
@@ -165,7 +165,7 @@ add address=$lan1Gateway name=router
 
 #1x1 Asterisk
 :global asteriskLanIp "10.1.2.5"
-:global asteriskPublicIp "XXX.XXX.106.164"
+:global asteriskPublicIp "179.179.106.164"
 /ip address
 remove [ /ip address find address="$asteriskPublicIp/29" ]
 add address="$asteriskPublicIp/29" comment="wan1 asterisk" interface=$wan1Interface1 network=$wan1Network

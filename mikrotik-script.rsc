@@ -1,50 +1,91 @@
 #INSTRUCTIONS
 #In order for this script to overwrite router settings successfully, perform the following steps:
-#  1. Connect your computer to the master port of LAN (very important). For example, on RB750, default is ether2
-#  2. Open terminal and execute /system reset-configuration (or reset configuration through reset button)
-#  3. After boot, connect to ssh (admin@192.168.88.1) and paste this script contents
+#  1. Connect your computer to the master port of LAN (very important). For example, on RB750 and RB2011, port is ether2
+#  2. Connect ssh terminal to admin@192.168.88.1 and execute /system reset-configuration (or reset configuration through reset button)
+#  3. After boot, connect to ssh and paste this script contents
 #  4. Verify if all steps were accepted
 #  5. Reboot router (/system reboot)
 #  6. Change your computer cable to ether4 (now it is the lan1-master)
 #If boot fails and you lose access to the router, unplug power cable, press reset button, plug it again,
 #when USR led starts blinking, release reset button. Connect to default address 192.168.88.1 and try again.
 #
-# For each deployed router
-#  - Change WAN1 and WAN2 fixed IPs (IP->Address and IP->Route change default-gateway for to_ISP1 or to_ISP2)
+# When deploying a new router:
+#  - Change WAN1 and WAN2 fixed IPs and gateways
+#       - IP->Address set wan1/wan2 to ISP IP
+#       - IP->Route change default-gateway for to_ISP1 or to_ISP2 to ISP gateway IP
 #  - Change WAN1 NAT 1x1 Asterisk IP (IP->Firewall->NAT)
-
+#  - Add DNS server address of your ISPs (IP->DNS)
+#  - Check if [/ip firewall filter] and [/ip firewall mangle] are not duplicated
+#       - on some routers there are builtin rules that cannot be deleted and that causes this script to be unable to clear rules before applying new ones. If needed, cleanup manually and execute the filter portion of this script on ssh terminal
+#  - Set an admin password (System->users)
+#  - Reboot router (sometimes the router doesn't routes packets from lan to wan before rebooting)
 
 #VARIABLES
-:global wan1Interface1 "ether1-wan1"
+
+#WAN SECTION
+#for RB750
+#:global wan1Interface1 "ether1-wan1"
+#for RB2011
+:global wan1Interface1 "ether06-wan1"
 :global wan1Address "179.179.106.163/29"
 :global wan1Network "179.179.106.160"
 :global wan1NetworkMask "179.179.106.160/24"
 :global wan1Gateway "179.179.106.161"
 
-:global wan1Interface2 "ether2-wan1"
+#for RB750
+#:global wan1Interface2 "ether2-wan1"
+#for RB2011
+:global wan1Interface2 "ether07-wan1"
+:global wan1Interface3 "ether08-wan1"
+:global wan1Interface4 "ether09-wan1"
 
-:global wan2Interface1 "ether3-wan2"
+#for RB750
+#:global wan2Interface1 "ether3-wan2"
+#for RB2011
+:global wan2Interface1 "ether10-wan2"
 :global wan2Address "192.168.1.111/24"
 :global wan2Network "192.168.1.0"
 :global wan2NetworkMask "192.168.1.0/24"
 :global wan2Gateway "192.168.1.254"
 
-:global lan1Interface1 "ether4-lan1"
+#LAN SECTION
+#for RB750
+#:global lan1Interface1 "ether4-lan1"
+#for RB2011
+:global lan1Interface1 "ether01-lan1"
 :global lan1Prefix "10.1.1"
 :global lan1Gateway "$lan1Prefix.254"
 :global lan1Address "$lan1Gateway/22"
 :global lan1Network "$lan1Prefix.0"
 
-:global lan1Interface2 "ether5-lan1"
+#for RB750
+#:global lan1Interface2 "ether5-lan1"
+#for RB2011
+:global lan1Interface2 "ether02-lan1"
+:global lan1Interface3 "ether03-lan1"
+:global lan1Interface4 "ether04-lan1"
+:global lan1Interface5 "ether05-lan1"
 
 
 #INTERFACE CONFIG
 /interface ethernet
-set [ find default-name=ether1 ] name=$wan1Interface1 master-port=none
-set [ find default-name=ether2 ] name=$wan1Interface2 master-port=none
-set [ find default-name=ether3 ] name=$wan2Interface1 master-port=none
-set [ find default-name=ether4 ] name=$lan1Interface1 master-port=none
-set [ find default-name=ether5 ] name=$lan1Interface2 master-port=none
+#for RB750
+#set [ find default-name=ether1 ] name=$wan1Interface1 master-port=none
+#set [ find default-name=ether2 ] name=$wan1Interface2 master-port=none
+#set [ find default-name=ether3 ] name=$wan2Interface1 master-port=none
+#set [ find default-name=ether4 ] name=$lan1Interface1 master-port=none
+#set [ find default-name=ether5 ] name=$lan1Interface2 master-port=none
+#for RB2011
+set [ find default-name=ether1 ]  name=$lan1Interface1 master-port=none
+set [ find default-name=ether2 ]  name=$lan1Interface2 master-port=none
+set [ find default-name=ether3 ]  name=$lan1Interface3 master-port=none
+set [ find default-name=ether4 ]  name=$lan1Interface4 master-port=none
+set [ find default-name=ether5 ]  name=$lan1Interface5 master-port=none
+set [ find default-name=ether6 ]  name=$wan1Interface1 master-port=none
+set [ find default-name=ether7 ]  name=$wan1Interface2 master-port=none
+set [ find default-name=ether8 ]  name=$wan1Interface3 master-port=none
+set [ find default-name=ether9 ]  name=$wan1Interface4 master-port=none
+set [ find default-name=ether10 ] name=$wan2Interface1 master-port=none
 
 /interface bridge
 remove [ /interface bridge find ]
@@ -56,13 +97,20 @@ add name="lan1"
 remove [ /interface bridge port find ]
 add bridge=wan1 interface=$wan1Interface1
 add bridge=wan1 interface=$wan1Interface2
+add bridge=wan1 interface=$wan1Interface3
+add bridge=wan1 interface=$wan1Interface4
 add bridge=wan2 interface=$wan2Interface1
+
 add bridge=lan1 interface=$lan1Interface1
 add bridge=lan1 interface=$lan1Interface2
+add bridge=lan1 interface=$lan1Interface3
+add bridge=lan1 interface=$lan1Interface4
+add bridge=lan1 interface=$lan1Interface5
 
 /ip neighbor discovery
 set $wan1Interface1 discover=no
 set $wan1Interface2 discover=no
+set $wan1Interface3 discover=no
 set $wan2Interface1 discover=no
 
 
@@ -106,8 +154,8 @@ add comment="limited packets for qos" packet-mark=!qos-unlimited-packets chain=f
 remove [ /ip route find ]
 add dst-address=0.0.0.0/0 gateway=$wan1Gateway routing-mark=to_ISP1 distance=1 check-gateway=ping
 add dst-address=0.0.0.0/0 gateway=$wan2Gateway routing-mark=to_ISP2 distance=1 check-gateway=ping
-#add dst-address=0.0.0.0/0 gateway=$wan1Gateway distance=1 check-gateway=ping
-#add dst-address=0.0.0.0/0 gateway=$wan2Gateway distance=1 check-gateway=ping
+add dst-address=0.0.0.0/0 gateway=$wan1Gateway distance=1 check-gateway=ping
+add dst-address=0.0.0.0/0 gateway=$wan2Gateway distance=1 check-gateway=ping
 
 
 #WAN FIREWALL CONFIG
@@ -162,7 +210,7 @@ add address="$lan1Network/24" comment="lan" gateway=$lan1Gateway dns-server=$lan
 
 #LAN DNS SERVER
 /ip dns
-set allow-remote-requests=yes
+set allow-remote-requests=yes servers=8.8.8.8,8.8.4.4
 
 /ip dns static
 remove [ /ip dns static find ]

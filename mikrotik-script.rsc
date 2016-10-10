@@ -27,6 +27,7 @@
 #:global wan1Interface1 "ether1-wan1"
 #for RB2011
 :global wan1Interface1 "ether06-wan1"
+:global wan1NatOutAddress "179.179.106.164"
 :global wan1Address "179.179.106.163/29"
 :global wan1Network "179.179.106.160"
 :global wan1NetworkMask "179.179.106.160/24"
@@ -43,6 +44,7 @@
 #:global wan2Interface1 "ether3-wan2"
 #for RB2011
 :global wan2Interface1 "ether10-wan2"
+:global wan2NatOutAddress "192.168.1.111"
 :global wan2Address "192.168.1.111/24"
 :global wan2Network "192.168.1.0"
 :global wan2NetworkMask "192.168.1.0/24"
@@ -57,6 +59,7 @@
 :global lan1Gateway "$lan1Prefix.254"
 :global lan1Address "$lan1Gateway/22"
 :global lan1Network "$lan1Prefix.0"
+#network: 10.1.1.0/22 broadcast: 10.1.3.255
 
 #for RB750
 #:global lan1Interface2 "ether5-lan1"
@@ -65,6 +68,10 @@
 :global lan1Interface3 "ether03-lan1"
 :global lan1Interface4 "ether04-lan1"
 :global lan1Interface5 "ether05-lan1"
+
+#Asterisk server (nat 1:1 to wan1)
+:global asteriskLanIp "10.1.2.5"
+:global asteriskPublicIp "179.179.106.164"
 
 
 #INTERFACE CONFIG
@@ -118,8 +125,9 @@ set $wan2Interface1 discover=no
 /ip address
 remove [ /ip address find address=wan1 ]
 remove [ /ip address find address=wan2 ]
-add address=$wan1Address comment="wan1" interface=wan1 network=$wan1Network
-add address=$wan2Address comment="wan2" interface=wan2 network=$wan2Network
+add address=$wan1Address comment="wan1 - router address" interface=wan1 network=$wan1Network
+add address=$asteriskPublicIp comment="wan1 - asterisk nat 1:1" interface=wan1 network=$wan1Network
+add address=$wan2Address comment="wan2 - router address" interface=wan2 network=$wan2Network
 
 /ip dhcp-client
 remove [ /ip dhcp-client find interface=wan1 ]
@@ -131,16 +139,16 @@ remove [ /ip dhcp-client find interface=wan2 ]
 remove [ /ip firewall mangle find ]
 
 #dual wan marks
-add chain=prerouting in-interface=lan1 dst-address=$wan1NetworkMask action=accept
-add chain=prerouting in-interface=lan1 dst-address=$wan2NetworkMask action=accept
-add chain=prerouting in-interface=wan1 connection-mark=no-mark action=mark-connection new-connection-mark=ISP1_conn
-add chain=prerouting in-interface=wan2 connection-mark=no-mark action=mark-connection new-connection-mark=ISP2_conn
-add chain=prerouting in-interface=lan1 connection-mark=no-mark dst-address-type=!local per-connection-classifier=both-addresses:2/0 action=mark-connection new-connection-mark=ISP1_conn
-add chain=prerouting in-interface=lan1 connection-mark=no-mark dst-address-type=!local per-connection-classifier=both-addresses:2/1 action=mark-connection new-connection-mark=ISP2_conn
-add chain=prerouting in-interface=lan1 connection-mark=ISP1_conn action=mark-routing new-routing-mark=to_ISP1
-add chain=prerouting in-interface=lan1 connection-mark=ISP2_conn action=mark-routing new-routing-mark=to_ISP2
-add chain=output connection-mark=ISP1_conn action=mark-routing new-routing-mark=to_ISP1
-add chain=output connection-mark=ISP2_conn action=mark-routing new-routing-mark=to_ISP2
+#add chain=prerouting in-interface=lan1 dst-address=$wan1NetworkMask action=accept
+#add chain=prerouting in-interface=lan1 dst-address=$wan2NetworkMask action=accept
+#add chain=prerouting in-interface=wan1 connection-mark=no-mark action=mark-connection new-connection-mark=ISP1_conn
+#add chain=prerouting in-interface=wan2 connection-mark=no-mark action=mark-connection new-connection-mark=ISP2_conn
+#add chain=prerouting in-interface=lan1 connection-mark=no-mark dst-address-type=!local per-connection-classifier=both-addresses:2/0 action=mark-connection new-connection-mark=ISP1_conn
+#add chain=prerouting in-interface=lan1 connection-mark=no-mark dst-address-type=!local per-connection-classifier=both-addresses:2/1 action=mark-connection new-connection-mark=ISP2_conn
+#add chain=prerouting in-interface=lan1 connection-mark=ISP1_conn action=mark-routing new-routing-mark=to_ISP1
+#add chain=prerouting in-interface=lan1 connection-mark=ISP2_conn action=mark-routing new-routing-mark=to_ISP2
+#add chain=output connection-mark=ISP1_conn action=mark-routing new-routing-mark=to_ISP1
+#add chain=output connection-mark=ISP2_conn action=mark-routing new-routing-mark=to_ISP2
 
 #qos marks
 add comment="packets from unlimited network" src-address=10.1.2.0/24 chain=forward action=mark-packet new-packet-mark=qos-unlimited-packets
@@ -152,33 +160,33 @@ add comment="limited packets for qos" packet-mark=!qos-unlimited-packets chain=f
 
 /ip route
 remove [ /ip route find ]
-add dst-address=0.0.0.0/0 gateway=$wan1Gateway routing-mark=to_ISP1 distance=1 check-gateway=ping
-add dst-address=0.0.0.0/0 gateway=$wan2Gateway routing-mark=to_ISP2 distance=1 check-gateway=ping
+#add dst-address=0.0.0.0/0 gateway=$wan1Gateway routing-mark=to_ISP1 distance=1 check-gateway=ping
+#add dst-address=0.0.0.0/0 gateway=$wan2Gateway routing-mark=to_ISP2 distance=1 check-gateway=ping
 add dst-address=0.0.0.0/0 gateway=$wan1Gateway distance=1 check-gateway=ping
-add dst-address=0.0.0.0/0 gateway=$wan2Gateway distance=1 check-gateway=ping
+add dst-address=0.0.0.0/0 gateway=$wan2Gateway distance=2 check-gateway=ping
 
 
 #WAN FIREWALL CONFIG
 /ip firewall filter
 remove [ /ip firewall filter find ]
-add chain=input comment="wan" protocol=icmp
-add chain=input comment="wan" connection-state=established,related
-add chain=input comment="enable remote management" protocol=tcp dst-port=80 action=accept
+add chain=input comment="input - accept icmp (ping etc)" protocol=icmp
+add chain=input comment="input - enable remote management" dst-port=80 protocol=tcp
+add chain=input comment="input - accept ssh" dst-port=22 protocol=tcp
+add chain=input comment="input - enable pptp vpn" dst-port=1723 protocol=tcp
+add chain=input comment="input - enable pptp vpn" protocol=gre
+add chain=input comment="input - accept all established/related packets" connection-state=established,related
+add action=drop chain=input comment="input - drop all packets by default wan1" in-interface=wan1 log=yes log-prefix="default drop"
+add action=drop chain=input comment="input - drop all packets by default wan2" in-interface=wan2 log=yes log-prefix="default drop"
 
-add chain=input comment="enable ssh" protocol=tcp dst-port=22 action=accept
-
-add chain=input comment="enable pptp vpn" protocol=tcp dst-port=1723 action=accept
-add chain=input comment="enable pptp vpn" protocol=47 action=accept
-
-add chain=forward comment="wan" connection-state=established,related
-add action=drop chain=forward comment="wan" connection-state=invalid
-
-add action=drop chain=input comment="wan1 default input drop" in-interface=wan1
-add action=drop chain=input comment="wan2 default input drop" in-interface=wan2
-
-add action=drop chain=forward comment="wan1 default forward drop" connection-nat-state=!dstnat connection-state=new in-interface=wan1
-add action=drop chain=forward comment="wan2 default forward drop" connection-nat-state=!dstnat connection-state=new in-interface=wan2
-
+add chain=forward comment="forward - accept all dst-nat new connections wan1" connection-nat-state=dstnat connection-state=new in-interface=wan1
+add chain=forward comment="forward - accept all dst-nat new connections wan2" connection-nat-state=dstnat connection-state=new in-interface=wan2
+add chain=forward comment="forward - accept all established/related packets" connection-state=established,related
+add action=drop chain=forward comment="forward - drop all packets by default wan1" in-interface=wan1 log=yes log-prefix="default drop"
+add action=drop chain=forward comment="forward - drop all packets by default wan2" in-interface=wan2 log=yes log-prefix="default drop"
+add action=drop chain=forward comment="forward - drop all packets that are new connections not configured on DST-NAT wan1" connection-nat-state=!dstnat \
+    connection-state=new disabled=yes in-interface=wan1
+add action=drop chain=forward comment="forward - drop all packets that are new connections not configured on DST-NAT wan2" connection-nat-state=!dstnat \
+    connection-state=new disabled=yes in-interface=wan2
 
 #LAN CONFIG
 /ip address
@@ -205,7 +213,7 @@ add address-pool=default-dhcp disabled=no interface=lan1 name=default
 
 /ip dhcp-server network
 remove [ /ip dhcp-server network find ]
-add address="$lan1Network/24" comment="lan" gateway=$lan1Gateway dns-server=$lan1Gateway
+add address="$lan1Network/22" comment="lan" gateway=$lan1Gateway dns-server=$lan1Gateway
 
 
 #LAN DNS SERVER
@@ -221,16 +229,14 @@ add address=$lan1Gateway name=router
 /ip firewall nat
 remove [ /ip firewall nat find ]
 
-#NAT 1x1 Asterisk
-:global asteriskLanIp "10.1.2.5"
-:global asteriskPublicIp "179.179.106.164"
-add chain=srcnat comment="nat 1x1 asterisk" out-interface=wan1 src-address=$asteriskLanIp action=src-nat to-address=$asteriskPublicIp
-add chain=dstnat comment="nat 1x1 asterisk" in-interface=wan1 dst-address=$asteriskPublicIp action=dst-nat to-address=$asteriskLanIp
+#NAT 1:1 Asterisk
+add chain=srcnat comment="nat 1:1 asterisk" out-interface=wan1 src-address=$asteriskLanIp action=src-nat to-address=$asteriskPublicIp
+add chain=dstnat comment="nat 1:1 asterisk" in-interface=wan1 dst-address=$asteriskPublicIp action=dst-nat to-address=$asteriskLanIp
 
 #NAT OUTBOUND
 /ip firewall nat
-add chain=srcnat comment="outbound nat wan1" out-interface=wan1 action=masquerade
-add chain=srcnat comment="outbound nat wan2" out-interface=wan2 action=masquerade
+add chain=srcnat comment="outbound nat wan1" out-interface=wan1 action=src-nat to-addresses=$wan1NatOutAddress
+add chain=srcnat comment="outbound nat wan2" out-interface=wan2 action=src-nat to-addresses=$wan2NatOutAddress
 
 
 #SYSTEM TOOLS

@@ -250,7 +250,7 @@ add name=pptp-profile local-address=default-dhcp remote-address=default-dhcp bri
 
 /ppp secret
 remove [ /ppp secret find name=admin ]
-add name=admin password="Straigh0Straigh0" profile=pptp-profile service=any
+add name=admin password="" profile=pptp-profile service=any
 
 /interface pptp-server server
 set enabled=yes
